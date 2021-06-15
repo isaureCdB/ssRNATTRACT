@@ -8,18 +8,15 @@ python3 and numpy
 add to your ~/.bashrc:
 export ssRNATTRACT='full path to consero directory'
 
+have frag[i].rmsd for each fragment
+
 #################################
 # Example of usage
 #################################
 
 # convert data from ATTRACT (RNA 3nt sequence AAUC)
-$ssRNATTRACT/prep_assembly.sh AAU
-$ssRNATTRACT/prep_assembly.sh AUC
-
-for n in "-preatoms.npy" "-postatoms.npy" ".lrmsd"; do
-    ln -s AAU$n frag1$n
-    ln -s AUC$n frag2$n
-done
+$ssRNATTRACT/prep_assembly.sh AAU frag1
+$ssRNATTRACT/prep_assembly.sh AUC frag2
 
 # assemble fragments
 # args: [first frag index] [last frag index] [Nb_poses] [Nb_chains] [meanrk] [min_overlap rmsd] [max_overlap rmsd]
