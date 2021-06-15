@@ -47,25 +47,30 @@ for rmsd in `seq $start 0.1 $end` ; do
     # if the file is wrong, delete it before re-runing the script
 
     #if [ ! -s $graph.json ];then
-      $ssRNATTRACT/scripts/assemble.py --nfrag $nfrag --rmsd $rmsd --maxstruct $maxstruc \
-      --preatoms frag[$f1-$f2]-preatoms.npy \
-      --postatoms frag[$f1-$f2]-postatoms.npy \
-      > /tmp/$graph.json
+    #  $ssRNATTRACT/scripts/assemble.py --nfrag $nfrag --rmsd $rmsd --maxstruct $maxstruc \
+    #  --preatoms frag[$f1-$f2]-preatoms.npy \
+    #  --postatoms frag[$f1-$f2]-postatoms.npy \
+     # > $graph.json
     #fi
 
+    python2 $ssRNATTRACT/scripts/connect.py $nfrag $rmsd $maxstruc \
+      --preatoms frag[$f1-$f2]-preatoms.npy \
+      --postatoms frag[$f1-$f2]-postatoms.npy \
+      > $graph.json
+    
     # Walk the graph to extract chains of connected poses
     chains=$graph\_${meanrk}meanrk
-    $ssRNATTRACT/scripts/make-chains.py --graph /tmp/$graph.json --meanrank $meanrk \
+    $ssRNATTRACT/scripts/make-chains.py --graph $graph.json --meanrank $meanrk \
       --preatoms frag[$f1-$f2]-preatoms.npy \
       --postatoms frag[$f1-$f2]-postatoms.npy \
       --rmsd frag[$f1-$f2].rmsd \
-      > /tmp/$chains.chains
+      > $chains.chains
 
-    Nchains=`awk '$1=="#indices"{i+=1}END{print i}' /tmp/$chains.chains`
+    Nchains=`awk '$1=="#indices"{i+=1}END{print i}' $chains.chains`
 
     if [ $Nchains -gt $nchains ]  ;then
-      mv /tmp/$chains.chains $d/
-      mv /tmp/$graph.json $d/
+      mv $chains.chains $d/
+      mv $graph.json $d/
       break
     fi
 done
