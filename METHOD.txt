@@ -1,0 +1,101 @@
+Requirements:
+Python2.7 with numpy and cffi installed
+NOTE: First run get_msd_build.py to build the _get_msd Python extension module
+
+======================================================================
+Overall goal: Assembling chains from docked fragments  (assemble.sh)
+======================================================================
+
+We consider a ssRNA sequence of length K+2, and cut it into K overlapping 3-nucl fragments. ex: ACUGA => ACU CUG UGA (K=3)
+
+We have N docking poses for each of the K fragments, notated as pose(k,n) with k in [1,K] and n in [1,N]. We want to assemble them into chains of connected poses. Two poses pose(k,n) and pose(k+1,m) are connected if their overlapping nucleotides have a RMSD < cutoff. For each pair, we call "preatoms" the atoms of the 2 last nucl of pose(k,n) and "postatoms" the atoms of the 2 first nucleotides of pose(k+1,m).
+
+The naive way to evaluate all possible chains would cost up to N**K RMSD computations, which is too costly (we have typically N ~ 10**5 and K ~ 5-10). Therefore, the assembly is split into two parts:
+1/ We will first create the graph of connected pairs of poses for each pair of fragments, this is done in connect.py
+2/ Using this connection graph, the chains are assembled by make_chains.py, using a maximum geometric mean rank ("meanrank")
+In between, meanrank_filter.py can filter the connection graph based on "meanrank", which improves the efficiency, especially when exploring different values of meanrank.
+
+===========================================================
+Creating the list of connected pairs of poses (connect.py)
+===========================================================
+A chain consists of K-1 pairs of consecutive poses, and the bruteforce computation of all pairwise connections for the whole chain would cost up to (K-1)*N**2 RMSD computations (can be less if the sequence is degenerated, cf slide 2 in LOOKATME).
+To reduce the number of pose-pose RMSD computation, we will cluster the poses of fragments by their pairwise RMSD, and compute distances at the cluster level. We will thus discard pairs belonging to distant clusters. 
+
+----------
+Connection 
+----------
+With the current implementation of connect.py, only the odd fragments are clustered, and they are compared with unclustered poses from the even fragments upstream and downstream. These pools are called "cluster trees". In other words, the odd fragments are genuine hierarchical trees of clusters, whereas the even fragments are represented by a flat cluster tree (all poses reside directly under the root node)
+There are two pools per fragment, the first pool containing the "preatom" coordinates, the second pool containing the "postatom" coordinates. preatoms and postatoms are clustered separately. So, for K = 3, the cluster-trees are the following:
+    cluster tree 0: fragment 1, post-atoms, flat tree
+    cluster tree 1: fragment 1, pre-atoms, flat tree
+    cluster tree 2: fragment 2, post-atoms, hierarchical tree
+    cluster tree 3: fragment 2, pre-atoms, hierarchical tree
+    cluster tree 4: fragment 3, post-atoms, flat tree
+    cluster tree 5: fragment 3, pre-atoms, flat tree    
+
+Initially, all poses in a hierarchical tree belong to one big cluster (the root node, a cluster of infinite radius). All poses of the flat trees are connected to the root nodes of the hierarchical trees. See slide 5
+
+----------------
+   Clustering
+----------------
+Poses are clustered on an RMSD criterion, to divide clusters into smaller clusters. Each cluster contains a representative pose. Internally, the pose coordinates are in a single coordinate array "coors", and the representative is simply the first pose.
+Clustering is done using an algorithm that avoids calculating the full N*N pairwise RMSD matrix: the first pose is automatically the representative of a new cluster. For each following pose P, the RMSD is compared to the representative of each existing cluster. Pose P is then either added to an existing cluster, or becomes the representative of a new cluster. In the implementation, this is done for blocks of poses in parallel, but the poses are still considered in linear order.
+
+The various hierarchical clustering cutoffs are defined in the CLUSTERING list. In Python, computing blocks (chunks) of RMSD matrices is more efficient than iterating over individual pairs poses. Therefore, clusters with only a few children are deleted and every subcluster is immediately child-linked to the root node (function "dissolve"). This way, each node in the cluster tree has at least MINCHILD children, which enables the use of large chunks.
+
+------------------------------
+   Decomposition
+-------------------------------
+Finally, the clusters in the hierarchical trees are decomposed. This means that its upstream and downstream connections are propagated to (some of) its children: we check the connection of each of its children with each of the clusters to which the parent-cluster was connected. If the connection is between cluster trees that belong to the same fragment, the connection is propagated simply if they have at least one pose index in common. In other words, two clusters of the postatoms-tree and preatoms-tree are connected if their intersection in not empty (preatoms and postatoms coordinates of a same docking poses keep the same index in both trees). This is done by the function "decompose_intra". 
+If they belong to consecutive fragments, the overlap RMSD of the cluster representatives are used to test their compatibility: we compute the best possible cluster-cluster RMSD by computing the reference-reference RMSD and adding a margin corresponding to the clusters radii (the clustering cutoffs). This is done by the "decompose" method.
+
+After decomposition, clusters that lack connections either upstream or downstream are discarded. The connections they made are destroyed. The uptsr/dwnstr clusters that these destroyed connections connected are in turn checked, etc. This is done by the "check_deletion" method.
+
+-------------------
+connectivity graph
+-------------------
+When the trees have been fully collapsed (all clusters are singletons), all wrong connections have been destroyed, and all remaining connections are written as a connectivity graph. This graph is written in a json output file. The schema is very simple:
+    nfrags: number of fragments
+    max_rmsd: maximum overlap RMSD used to build the trees
+    clusters: list(length=nfrags) of list of clusters
+      every cluster contains: 
+        radius (the clustering threshold, should be 0 for fully decomposed trees)
+        ranks: the ATTRACT ranks of all structures in the cluster (ATTRACT rank is inferred from pose order!)
+               normally, for fully decomposed trees, ranks contains a single pose, or a few poses that are within 0.1 A
+    interactions: list(length=nfrags-1) of connection lists
+      interactions[i][j] consists of two indices k1 and k2, that identify two connected clusters: clusters[i][k1] and clusters[i+1][k2]
+
+==========================================
+  Meanrank filter (meanrank_filter.py)
+==========================================
+This step removes connections by a branch-and-bound algo, eliminating connections that only participate in chains that have a bad score. Score is defined as a geometric mean rank, which means that the logsum of all ranks in the chain must be below a threshold, which is Nfrag * log(meanrank), where meanrank is user-defined.
+
+First, we start with a precalculation step: we compute for each pose X the best score of all sub-chains that start at X. This best score is called "optimus" in the script. 
+Then we start building chains. We define a "supernode" that is connected to every node (pose) in the first fragment. Therefore, every possible chain starts with the supernode. We repeatedly ask the supernode for a chunk of logranksums of half-chains (that start at the that node). This is implemented by the make_chunk method.
+
+Initally, a node is in a reset state: it's chunk is empty, and the current position (.pos attribute) is set to the beginning.
+Whenever any node is asked for a chunk of half-chains, it does the following:
+- If it is at the end of the chain, it returns a chunk containing a single chain (its own logrank), and says it is done.
+- If not:
+    0. If the node is not in a reset state, empty the node's chunk, and goto 4
+    1. If "pos" is at the end of the connection list, the node says it is done, and returns its chunk.
+    2. The node increments "pos" to point to the next downstream connection. This connection is called "con". 
+    3. If the node's logrank + the con's optimus is worse than the threshold, destroy the connection, and goto 1.
+    4. It asks "con" for a new chunk of half-chains.
+    5. It add its own logrank to the con's chunk. The values that exceed the threshold are discarded, the remainder is kept.
+    6. If the remainder of the con's chunk not empty, the con is flagged as "good"
+    7. If the remainder of the con's chunk does not fit into the node's own chunk, return the node's own chunk.
+    8. The remainder of the con's chunk is added to the node's own chunk.
+    9  If "con" is not done, goto 4.
+    9. "Con" is reset (moving its pos to the beginning). If "con" was not flagged as "good", destroy the connection. Goto 1. 
+    
+The "half-chain" chunks returned by the supernode are in fact the meanranks of the complete chains (since all chains start at the supernode).
+
+For now, we apply the filter on the poses (i.e. on the fully decomposed trees). We might also apply it on the partially clustered trees, and discard clusters.
+
+==========================================
+ Assembling the chains (make_chains.py)
+==========================================
+This script is very simple. It loads the connectivity graph and builds chains by following all connections, aborting if a too high meanrank is reached. It also computes the overlap RMSD, and the RMSD towards the crystallographic structure used as golden standard (considered as the free energy minimum).
+
+
