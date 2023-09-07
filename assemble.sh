@@ -53,9 +53,9 @@ for rmsd in `seq $start 0.1 $end` ; do
       > $graph.json
     fi
 
-    python2 $ssRNATTRACT/scripts/connect.py $nfrag $rmsd $maxstruc 1 \
-      frag[$f1-$f2]-preatoms.npy frag[$f1-$f2]-postatoms.npy \
-      > $graph.json
+    #python2 $ssRNATTRACT/scripts/connect.py $nfrag $rmsd $maxstruc 1 \
+    #  frag[$f1-$f2]-preatoms.npy frag[$f1-$f2]-postatoms.npy \
+    #  > $graph.json
     
     # Walk the graph to extract chains of connected poses
     chains=$graph\_${meanrk}meanrk
