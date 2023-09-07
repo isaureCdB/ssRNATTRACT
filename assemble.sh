@@ -46,12 +46,12 @@ for rmsd in `seq $start 0.1 $end` ; do
     # !!! does not recompute the graph if file already exist !!!
     # if the file is wrong, delete it before re-runing the script
 
-    #if [ ! -s $graph.json ];then
-    #  $ssRNATTRACT/scripts/assemble.py --nfrag $nfrag --rmsd $rmsd --maxstruct $maxstruc \
-    #  --preatoms frag[$f1-$f2]-preatoms.npy \
-    #  --postatoms frag[$f1-$f2]-postatoms.npy \
-     # > $graph.json
-    #fi
+    if [ ! -s $graph.json ];then
+      $ssRNATTRACT/scripts/assemble.py --nfrag $nfrag --rmsd $rmsd --maxstruct $maxstruc \
+      --preatoms frag[$f1-$f2]-preatoms.npy \
+      --postatoms frag[$f1-$f2]-postatoms.npy \
+      > $graph.json
+    fi
 
     python2 $ssRNATTRACT/scripts/connect.py $nfrag $rmsd $maxstruc 1 \
       frag[$f1-$f2]-preatoms.npy frag[$f1-$f2]-postatoms.npy \
