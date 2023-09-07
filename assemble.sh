@@ -77,7 +77,7 @@ done
 # count number of chains
 # compute number of +/- correct chains (RMSD <6A, <5A, <4A )
 # RMSD is approximated by averaging the RMSD of the fragments
-awk -v r=$rmsd 'BEGIN{i=0;j=0; k=0;m=10}
+awk 'BEGIN{i=0;j=0; k=0;m=10}
     NR>1&&$2<6{i+=1}
     NR>1&&$2<5{j+=1}
     NR>1&&$2<4{k+=1}
