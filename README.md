@@ -16,6 +16,7 @@ have frag[i].rmsd for each fragment
 
 # convert data from ATTRACT (RNA 3nt sequence AAUC)
 $ssRNATTRACT/prep_assembly.sh AAU frag1
+
 $ssRNATTRACT/prep_assembly.sh AUC frag2
 
 # assemble fragments
