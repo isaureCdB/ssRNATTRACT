@@ -75,8 +75,8 @@ for n in range(nfrags):
   nstruc.append(a1.shape[0])
 
 for n in range(1, nfrags):
-  a1 = postatoms[n-1]
-  a2 = preatoms[n]
+  a1 = postatoms[n]
+  a2 = preatoms[n-1]
   assert a1.shape[1] == a2.shape[1], (n, a1.shape, n+1, a2.shape)
 
 for selnr, sel in enumerate(selections):
