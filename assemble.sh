@@ -65,7 +65,7 @@ for rmsd in `seq $start 0.1 $end` ; do
       --rmsd frag[$f1-$f2].rmsd \
       > $chains.chains
 
-    Nchains=`awk '$1=="#indices"{i+=1}END{print i}' $chains.chains`
+    Nchains=`awk 'BEGIN{i=0}$1=="#indices"{i+=1}END{print i}' $chains.chains`
 
     if [ $Nchains -gt $nchains ]  ;then
       mv $chains.chains $d/
