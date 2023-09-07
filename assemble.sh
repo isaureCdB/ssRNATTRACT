@@ -67,11 +67,11 @@ for rmsd in `seq $start 0.1 $end` ; do
 
     Nchains=`awk 'BEGIN{i=0}$1=="#indices"{i+=1}END{print i}' $chains.chains`
 
-    if [ $Nchains -gt $nchains ]  ;then
-      mv $chains.chains $d/
-      mv $graph.json $d/
-      break
-    fi
+    #if [ $Nchains -gt $nchains ]  ;then
+    #  mv $chains.chains $d/
+    #  mv $graph.json $d/
+    #  break
+    #fi
 done
 
 # count number of chains
