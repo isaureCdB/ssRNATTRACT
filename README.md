@@ -6,7 +6,7 @@ python2 and numpy
 python3 and numpy
 
 add to your ~/.bashrc:
-export ssRNATTRACT='full path to consero directory'
+export ssRNATTRACT='full path to git directory'
 
 have frag[i].rmsd for each fragment
 
